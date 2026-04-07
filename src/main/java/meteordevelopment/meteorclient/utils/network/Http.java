@@ -19,7 +19,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.util.Date;
-import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -30,9 +29,7 @@ public class Http {
     public static final int FORBIDDEN = 403;
     public static final int NOT_FOUND = 404;
 
-    private static final HttpClient CLIENT = HttpClient.newBuilder()
-        .executor(Executors.newVirtualThreadPerTaskExecutor())
-        .build();
+    private static final HttpClient CLIENT = HttpClient.newHttpClient();
 
     private static final Gson GSON = new GsonBuilder()
         .registerTypeAdapter(Date.class, new JsonDateDeserializer())

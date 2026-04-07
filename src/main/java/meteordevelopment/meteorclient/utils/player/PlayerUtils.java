@@ -34,7 +34,6 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.GameMode;
 import net.minecraft.world.RaycastContext;
-import net.minecraft.world.attribute.EnvironmentAttributes;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 import static meteordevelopment.meteorclient.utils.Utils.WHITE;
@@ -73,24 +72,24 @@ public class PlayerUtils {
         double velZ = 0;
 
         boolean a = false;
-        if (mc.player.input.playerInput.forward()) {
+        if (mc.player.input.pressingForward) {
             velX += forward.x / 20 * bps;
             velZ += forward.z / 20 * bps;
             a = true;
         }
-        if (mc.player.input.playerInput.backward()) {
+        if (mc.player.input.pressingBack) {
             velX -= forward.x / 20 * bps;
             velZ -= forward.z / 20 * bps;
             a = true;
         }
 
         boolean b = false;
-        if (mc.player.input.playerInput.right()) {
+        if (mc.player.input.pressingRight) {
             velX += right.x / 20 * bps;
             velZ += right.z / 20 * bps;
             b = true;
         }
-        if (mc.player.input.playerInput.left()) {
+        if (mc.player.input.pressingLeft) {
             velX -= right.x / 20 * bps;
             velZ -= right.z / 20 * bps;
             b = true;
@@ -101,7 +100,7 @@ public class PlayerUtils {
             velZ *= diagonal;
         }
 
-        ((IVec3d) horizontalVelocity).meteor$setXZ(velX, velZ);
+        ((IVec3d) horizontalVelocity).setXZ(velX, velZ);
         return horizontalVelocity;
     }
 
@@ -109,19 +108,18 @@ public class PlayerUtils {
         double x = MathHelper.floor(mc.player.getX()) + 0.5;
         double z = MathHelper.floor(mc.player.getZ()) + 0.5;
         mc.player.setPosition(x, mc.player.getY(), z);
-        mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.PositionAndOnGround(mc.player.getX(), mc.player.getY(), mc.player.getZ(), mc.player.isOnGround(), mc.player.horizontalCollision));
+        mc.player.networkHandler.sendPacket(new PlayerMoveC2SPacket.PositionAndOnGround(mc.player.getX(), mc.player.getY(), mc.player.getZ(), mc.player.isOnGround()));
     }
 
-    @SuppressWarnings("DataFlowIssue")
     public static boolean canSeeEntity(Entity entity) {
         Vec3d vec1 = new Vec3d(0, 0, 0);
         Vec3d vec2 = new Vec3d(0, 0, 0);
 
-        ((IVec3d) vec1).meteor$set(mc.player.getX(), mc.player.getY() + mc.player.getStandingEyeHeight(), mc.player.getZ());
-        ((IVec3d) vec2).meteor$set(entity.getX(), entity.getY(), entity.getZ());
+        ((IVec3d) vec1).set(mc.player.getX(), mc.player.getY() + mc.player.getStandingEyeHeight(), mc.player.getZ());
+        ((IVec3d) vec2).set(entity.getX(), entity.getY(), entity.getZ());
         boolean canSeeFeet = mc.world.raycast(new RaycastContext(vec1, vec2, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player)).getType() == HitResult.Type.MISS;
 
-        ((IVec3d) vec2).meteor$set(entity.getX(), entity.getY() + entity.getStandingEyeHeight(), entity.getZ());
+        ((IVec3d) vec2).set(entity.getX(), entity.getY() + entity.getStandingEyeHeight(), entity.getZ());
         boolean canSeeEyes = mc.world.raycast(new RaycastContext(vec1, vec2, RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.NONE, mc.player)).getType() == HitResult.Type.MISS;
 
         return canSeeFeet || canSeeEyes;
@@ -195,7 +193,7 @@ public class PlayerUtils {
             for (Entity entity : mc.world.getEntities()) {
                 // Check for end crystals
                 if (entity instanceof EndCrystalEntity) {
-                    float crystalDamage = DamageUtils.crystalDamage(mc.player, entity.getEntityPos());
+                    float crystalDamage = DamageUtils.crystalDamage(mc.player, entity.getPos());
                     if (crystalDamage > damageTaken) damageTaken = crystalDamage;
                 }
                 // Check for players holding swords
@@ -206,7 +204,7 @@ public class PlayerUtils {
             }
 
             // Check for beds if in nether
-            if (mc.world.getEnvironmentAttributes().getAttributeValue(EnvironmentAttributes.BED_RULE_GAMEPLAY).explodes()) {
+            if (PlayerUtils.getDimension() != Dimension.Overworld) {
                 for (BlockEntity blockEntity : Utils.blockEntities()) {
                     BlockPos bp = blockEntity.getPos();
                     Vec3d pos = new Vec3d(bp.getX(), bp.getY(), bp.getZ());
@@ -297,7 +295,7 @@ public class PlayerUtils {
     }
 
     public static double squaredDistanceToCamera(double x, double y, double z) {
-        Vec3d cameraPos = mc.gameRenderer.getCamera().getCameraPos();
+        Vec3d cameraPos = mc.gameRenderer.getCamera().getPos();
         return squaredDistance(cameraPos.x, cameraPos.y, cameraPos.z, x, y, z);
     }
 

@@ -18,10 +18,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(RenderTickCounter.Dynamic.class)
 public abstract class RenderTickCounterDynamicMixin {
     @Shadow
-    private float dynamicDeltaTicks;
+    private float lastFrameDuration;
 
-    @Inject(method = "beginRenderTick(J)I", at = @At(value = "FIELD", target = "Lnet/minecraft/client/render/RenderTickCounter$Dynamic;lastTimeMillis:J", opcode = Opcodes.PUTFIELD))
+    @Inject(method = "beginRenderTick(J)I", at = @At(value = "FIELD", target = "Lnet/minecraft/client/render/RenderTickCounter$Dynamic;prevTimeMillis:J", opcode = Opcodes.PUTFIELD))
     private void onBeingRenderTick(long a, CallbackInfoReturnable<Integer> info) {
-        dynamicDeltaTicks *= (float) Modules.get().get(Timer.class).getMultiplier();
+        lastFrameDuration *= (float) Modules.get().get(Timer.class).getMultiplier();
     }
 }

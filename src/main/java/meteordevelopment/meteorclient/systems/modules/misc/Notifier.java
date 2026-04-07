@@ -23,7 +23,6 @@ import meteordevelopment.meteorclient.utils.player.PlayerUtils;
 import meteordevelopment.orbit.EventHandler;
 import net.minecraft.client.network.PlayerListEntry;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityStatuses;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.thrown.EnderPearlEntity;
@@ -216,7 +215,7 @@ public class Notifier extends Module {
             } else {
                 MutableText text = Text.literal(event.entity.getType().getName().getString()).formatted(Formatting.WHITE);
                 text.append(Text.literal(" has spawned at ").formatted(Formatting.GRAY));
-                text.append(formatCoords(event.entity.getEntityPos()));
+                text.append(formatCoords(event.entity.getPos()));
                 text.append(Text.literal(".").formatted(Formatting.GRAY));
                 info(text);
             }
@@ -240,7 +239,7 @@ public class Notifier extends Module {
             } else {
                 MutableText text = Text.literal(event.entity.getType().getName().getString()).formatted(Formatting.WHITE);
                 text.append(Text.literal(" has despawned at ").formatted(Formatting.GRAY));
-                text.append(formatCoords(event.entity.getEntityPos()));
+                text.append(formatCoords(event.entity.getPos()));
                 text.append(Text.literal(".").formatted(Formatting.GRAY));
                 info(text);
             }
@@ -252,7 +251,7 @@ public class Notifier extends Module {
             if (pearlStartPosMap.containsKey(i)) {
                 EnderPearlEntity pearl = (EnderPearlEntity) e;
                 if (pearl.getOwner() != null && pearl.getOwner() instanceof PlayerEntity p) {
-                    double d = pearlStartPosMap.get(i).distanceTo(e.getEntityPos());
+                    double d = pearlStartPosMap.get(i).distanceTo(e.getPos());
                     if ((!Friends.get().isFriend(p) || !pearlIgnoreFriends.get()) && (!p.equals(mc.player) || !pearlIgnoreOwn.get())) {
                         info("(highlight)%s's(default) pearl landed at %d, %d, %d (highlight)(%.1fm away, travelled %.1fm)(default).", pearl.getOwner().getName().getString(), pearl.getBlockPos().getX(), pearl.getBlockPos().getY(), pearl.getBlockPos().getZ(), pearl.distanceTo(mc.player), d);
                     }
@@ -307,7 +306,7 @@ public class Notifier extends Module {
             case PlayerRemoveS2CPacket packet when joinsLeavesMode.get().equals(JoinLeaveModes.Both) || joinsLeavesMode.get().equals(JoinLeaveModes.Leaves) ->
                 createLeaveNotification(packet);
 
-            case EntityStatusS2CPacket packet when totemPops.get() && packet.getStatus() == EntityStatuses.USE_TOTEM_OF_UNDYING && packet.getEntity(mc.world) instanceof PlayerEntity entity -> {
+            case EntityStatusS2CPacket packet when totemPops.get() && packet.getStatus() == 35 && packet.getEntity(mc.world) instanceof PlayerEntity entity -> {
                 if ((entity.equals(mc.player) && totemsIgnoreOwn.get())
                     || (Friends.get().isFriend(entity) && totemsIgnoreOthers.get())
                     || (!Friends.get().isFriend(entity) && totemsIgnoreFriends.get())
@@ -334,7 +333,7 @@ public class Notifier extends Module {
             while (timer >= notificationDelay.get() && !messageQueue.isEmpty()) {
                 timer = 0;
                 if (simpleNotifications.get()) {
-                    mc.player.sendMessage(messageQueue.removeFirst(), false);
+                    mc.player.sendMessage(messageQueue.removeFirst());
                 } else {
                     ChatUtils.sendMsg(messageQueue.removeFirst());
                 }
@@ -369,12 +368,12 @@ public class Notifier extends Module {
                     Formatting.GRAY + "["
                         + Formatting.GREEN + "+"
                         + Formatting.GRAY + "] "
-                        + entry.profile().name()
+                        + entry.profile().getName()
                 ));
             } else {
                 messageQueue.addLast(Text.literal(
                     Formatting.WHITE
-                        + entry.profile().name()
+                        + entry.profile().getName()
                         + Formatting.GRAY + " joined."
                 ));
             }
@@ -393,12 +392,12 @@ public class Notifier extends Module {
                     Formatting.GRAY + "["
                         + Formatting.RED + "-"
                         + Formatting.GRAY + "] "
-                        + toRemove.getProfile().name()
+                        + toRemove.getProfile().getName()
                 ));
             } else {
                 messageQueue.addLast(Text.literal(
                     Formatting.WHITE
-                        + toRemove.getProfile().name()
+                        + toRemove.getProfile().getName()
                         + Formatting.GRAY + " left."
                 ));
             }

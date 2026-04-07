@@ -51,21 +51,18 @@ public class TargetUtils {
 
         targetList.sort(sortPriority);
         // fast list trimming
-        if (targetList.size() > maxCount) {
-            targetList.subList(maxCount, targetList.size()).clear();
-        }
+        for (int i = targetList.size() - 1; i >= maxCount; i--) targetList.remove(i);
     }
 
     @Nullable
     public static PlayerEntity getPlayerTarget(double range, SortPriority priority) {
         if (!Utils.canUpdate()) return null;
         return (PlayerEntity) get(entity -> {
-            if (!(entity instanceof PlayerEntity player) || entity == mc.player) return false;
-            if (player.isDead() || player.getHealth() <= 0) return false;
+            if (!(entity instanceof PlayerEntity) || entity == mc.player) return false;
+            if (((PlayerEntity) entity).isDead() || ((PlayerEntity) entity).getHealth() <= 0) return false;
             if (!PlayerUtils.isWithin(entity, range)) return false;
-            if (!Friends.get().shouldAttack(player)) return false;
-            if (entity instanceof FakePlayerEntity fakePlayer) return !fakePlayer.noHit;
-            return EntityUtils.getGameMode(player) == GameMode.SURVIVAL;
+            if (!Friends.get().shouldAttack((PlayerEntity) entity)) return false;
+            return EntityUtils.getGameMode((PlayerEntity) entity) == GameMode.SURVIVAL || entity instanceof FakePlayerEntity;
         }, priority);
     }
 

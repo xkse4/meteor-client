@@ -140,7 +140,7 @@ public class VeinMiner extends Module {
 
     @Override
     public void onDeactivate() {
-        blockPool.freeAll(blocks);
+        for (MyBlock block : blocks) blockPool.free(block);
         blocks.clear();
         foundBlockPositions.clear();
     }

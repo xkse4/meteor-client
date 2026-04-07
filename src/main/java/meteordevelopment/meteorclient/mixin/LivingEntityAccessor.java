@@ -15,14 +15,14 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 @Mixin(LivingEntity.class)
 public interface LivingEntityAccessor {
     @Invoker("swimUpward")
-    void meteor$swimUpwards(TagKey<Fluid> fluid);
+    void swimUpwards(TagKey<Fluid> fluid);
 
     @Accessor("jumping")
-    boolean meteor$isJumping();
+    boolean isJumping();
 
     @Accessor("jumpingCooldown")
-    int meteor$getJumpCooldown();
+    int getJumpCooldown();
 
     @Accessor("jumpingCooldown")
-    void meteor$setJumpCooldown(int cooldown);
+    void setJumpCooldown(int cooldown);
 }

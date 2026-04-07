@@ -19,26 +19,20 @@ public abstract class Vec3dMixin implements IVec3d {
     @Shadow @Final @Mutable public double z;
 
     @Override
-    public Vec3d meteor$set(double x, double y, double z) {
+    public void set(double x, double y, double z) {
         this.x = x;
         this.y = y;
         this.z = z;
-
-        return (Vec3d) (Object) this;
     }
 
     @Override
-    public Vec3d meteor$setXZ(double x, double z) {
+    public void setXZ(double x, double z) {
         this.x = x;
         this.z = z;
-
-        return (Vec3d) (Object) this;
     }
 
     @Override
-    public Vec3d meteor$setY(double y) {
+    public void setY(double y) {
         this.y = y;
-
-        return (Vec3d) (Object) this;
     }
 }

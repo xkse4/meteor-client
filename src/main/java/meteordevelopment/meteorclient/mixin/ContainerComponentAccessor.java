@@ -13,6 +13,6 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 
 @Mixin(ContainerComponent.class)
 public interface ContainerComponentAccessor {
-    @Accessor("stacks")
-    DefaultedList<ItemStack> meteor$getStacks();
+    @Accessor
+    DefaultedList<ItemStack> getStacks();
 }

@@ -40,7 +40,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 import java.util.PrimitiveIterator;
 import java.util.Random;
@@ -103,14 +102,6 @@ public class BookBot extends Module {
         .description("Whether to append the number of the book to the title.")
         .defaultValue(true)
         .visible(sign::get)
-        .build()
-    );
-
-    private final Setting<Boolean> wordWrap = sgGeneral.add(new BoolSetting.Builder()
-        .name("word-wrap")
-        .description("Prevents words from being cut in the middle of lines.")
-        .defaultValue(true)
-        .visible(() -> mode.get() == Mode.File)
         .build()
     );
 
@@ -178,7 +169,7 @@ public class BookBot extends Module {
     private void onTick(TickEvent.Post event) {
         Predicate<ItemStack> bookPredicate = i -> {
             WritableBookContentComponent component = i.get(DataComponentTypes.WRITABLE_BOOK_CONTENT);
-            return i.getItem() == Items.WRITABLE_BOOK && (component == null || component.pages().isEmpty());
+            return i.getItem() == Items.WRITABLE_BOOK && (component != null || component.pages().isEmpty());
         };
 
         FindItemResult writableBook = InvUtils.find(bookPredicate);
@@ -191,7 +182,7 @@ public class BookBot extends Module {
 
         // Move the book into hand
         if (!InvUtils.testInMainHand(bookPredicate)) {
-            InvUtils.move().from(writableBook.slot()).toHotbar(mc.player.getInventory().getSelectedSlot());
+            InvUtils.move().from(writableBook.slot()).toHotbar(mc.player.getInventory().selectedSlot);
             return;
         }
 
@@ -231,7 +222,7 @@ public class BookBot extends Module {
                 message.append(Text.literal("Click here to edit it.")
                     .setStyle(Style.EMPTY
                         .withFormatting(Formatting.UNDERLINE, Formatting.RED)
-                        .withClickEvent(new ClickEvent.OpenFile(file.getAbsolutePath()))
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.OPEN_FILE, file.getAbsolutePath()))
                     )
                 );
                 info(message);
@@ -261,119 +252,75 @@ public class BookBot extends Module {
     private void writeBook(PrimitiveIterator.OfInt chars) {
         ArrayList<String> pages = new ArrayList<>();
         ArrayList<RawFilteredPair<Text>> filteredPages = new ArrayList<>();
+        TextHandler.WidthRetriever widthRetriever = ((TextHandlerAccessor) mc.textRenderer.getTextHandler()).getWidthRetriever();
+
         int maxPages = mode.get() == Mode.File ? 100 : this.pages.get();
 
-        if (wordWrap.get() && mode.get() == Mode.File) {
-            StringBuilder text = new StringBuilder();
-            while (chars.hasNext()) {
-                text.appendCodePoint(chars.nextInt());
-            }
-
-            // Use mc's own word wrapping logic
-            List<StringVisitable> wrappedLines = mc.textRenderer.wrapLinesWithoutLanguage(Text.literal(text.toString()), 114);
-            processLinesToPages(wrappedLines, pages, filteredPages, maxPages);
-        } else {
-            // Non-word-wrapping logic
-            TextHandler.WidthRetriever widthRetriever = ((TextHandlerAccessor) mc.textRenderer.getTextHandler()).meteor$getWidthRetriever();
-            int pageIndex = 0;
-            int lineIndex = 0;
-            final StringBuilder page = new StringBuilder();
-            float lineWidth = 0;
-
-            while (chars.hasNext()) {
-                int c = chars.nextInt();
-
-                if (c == '\r' || c == '\n') {
-                    page.append('\n');
-                    lineWidth = 0;
-                    lineIndex++;
-                } else {
-                    float charWidth = widthRetriever.getWidth(c, Style.EMPTY);
-
-                    // Reached end of line
-                    if (lineWidth + charWidth > 114f) {
-                        page.append('\n');
-                        lineWidth = charWidth;
-                        lineIndex++;
-                        // Wrap to next line, unless wrapping to next page
-                        if (lineIndex != 14) page.appendCodePoint(c);
-                    } else if (lineWidth == 0f && c == ' ') {
-                        continue; // Prevent leading space from text wrapping
-                    } else {
-                        lineWidth += charWidth;
-                        page.appendCodePoint(c);
-                    }
-                }
-
-                // Reached end of page
-                if (lineIndex == 14) {
-                    filteredPages.add(RawFilteredPair.of(Text.of(page.toString())));
-                    pages.add(page.toString());
-                    page.setLength(0);
-                    pageIndex++;
-                    lineIndex = 0;
-
-                    // No more pages
-                    if (pageIndex == maxPages) break;
-
-                    // Wrap to next page
-                    if (c != '\r' && c != '\n') {
-                        page.appendCodePoint(c);
-                    }
-                }
-            }
-
-            // No more characters, end current page
-            if (!page.isEmpty() && pageIndex != maxPages) {
-                filteredPages.add(RawFilteredPair.of(Text.of(page.toString())));
-                pages.add(page.toString());
-            }
-        }
-
-        createBook(pages, filteredPages);
-    }
-
-    private void processLinesToPages(List<StringVisitable> lines, ArrayList<String> pages, ArrayList<RawFilteredPair<Text>> filteredPages, int maxPages) {
         int pageIndex = 0;
         int lineIndex = 0;
-        StringBuilder currentPage = new StringBuilder();
 
-        for (StringVisitable line : lines) {
-            String lineText = line.getString();
+        final StringBuilder page = new StringBuilder();
 
-            if (currentPage.length() > 0) {
-                currentPage.append('\n');
+        float lineWidth = 0;
+
+        while (chars.hasNext()) {
+            int c = chars.nextInt();
+
+            if (c == '\r' || c == '\n') {
+                page.append('\n');
+                lineWidth = 0;
+                lineIndex++;
+            } else {
+                float charWidth = widthRetriever.getWidth(c, Style.EMPTY);
+
+                // Reached end of line
+                if (lineWidth + charWidth > 114f) {
+                    page.append('\n');
+                    lineWidth = charWidth;
+                    lineIndex++;
+                    // Wrap to next line, unless wrapping to next page
+                    if (lineIndex != 14) page.appendCodePoint(c);
+                } else if (lineWidth == 0f && c == ' ') {
+                    continue; // Prevent leading space from text wrapping
+                } else {
+                    lineWidth += charWidth;
+                    page.appendCodePoint(c);
+                }
             }
-            currentPage.append(lineText);
-            lineIndex++;
 
+            // Reached end of page
             if (lineIndex == 14) {
-                filteredPages.add(RawFilteredPair.of(Text.of(currentPage.toString())));
-                pages.add(currentPage.toString());
-                currentPage.setLength(0);
+                filteredPages.add(RawFilteredPair.of(Text.of(page.toString())));
+                pages.add(page.toString());
+                page.setLength(0);
                 pageIndex++;
                 lineIndex = 0;
 
+                // No more pages
                 if (pageIndex == maxPages) break;
+
+                // Wrap to next page
+                if (c != '\r' && c != '\n') {
+                    page.appendCodePoint(c);
+                }
             }
         }
 
-        if (!currentPage.isEmpty() && pageIndex < maxPages) {
-            filteredPages.add(RawFilteredPair.of(Text.of(currentPage.toString())));
-            pages.add(currentPage.toString());
+        // No more characters, end current page
+        if (!page.isEmpty() && pageIndex != maxPages) {
+            filteredPages.add(RawFilteredPair.of(Text.of(page.toString())));
+            pages.add(page.toString());
         }
-    }
 
-    private void createBook(ArrayList<String> pages, ArrayList<RawFilteredPair<Text>> filteredPages) {
         // Get the title with count
         String title = name.get();
         if (count.get() && bookCount != 0) title += " #" + bookCount;
 
         // Write data to book
-        mc.player.getMainHandStack().set(DataComponentTypes.WRITTEN_BOOK_CONTENT, new WrittenBookContentComponent(RawFilteredPair.of(title), mc.player.getGameProfile().name(), 0, filteredPages, true));
+        mc.player.getMainHandStack().set(DataComponentTypes.WRITTEN_BOOK_CONTENT, new WrittenBookContentComponent(RawFilteredPair.of(title), mc.player.getGameProfile().getName(), 0, filteredPages, true));
 
         // Send book update to server
-        mc.player.networkHandler.sendPacket(new BookUpdateC2SPacket(mc.player.getInventory().getSelectedSlot(), pages, sign.get() ? Optional.of(title) : Optional.empty()));
+        mc.player.networkHandler.sendPacket(new BookUpdateC2SPacket(mc.player.getInventory().selectedSlot, pages, sign.get() ? Optional.of(title) : Optional.empty()));
 
         bookCount++;
     }
@@ -392,7 +339,7 @@ public class BookBot extends Module {
     @Override
     public Module fromTag(NbtCompound tag) {
         if (tag.contains("file")) {
-            file = new File(tag.getString("file", ""));
+            file = new File(tag.getString("file"));
         }
 
         return super.fromTag(tag);

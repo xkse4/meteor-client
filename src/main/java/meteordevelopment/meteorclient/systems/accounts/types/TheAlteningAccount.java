@@ -10,6 +10,8 @@ import com.mojang.authlib.yggdrasil.YggdrasilAuthenticationService;
 import de.florianmichael.waybackauthlib.InvalidCredentialsException;
 import de.florianmichael.waybackauthlib.WaybackAuthLib;
 import meteordevelopment.meteorclient.MeteorClient;
+import meteordevelopment.meteorclient.mixin.MinecraftClientAccessor;
+import meteordevelopment.meteorclient.mixin.YggdrasilMinecraftSessionServiceAccessor;
 import meteordevelopment.meteorclient.systems.accounts.Account;
 import meteordevelopment.meteorclient.systems.accounts.AccountType;
 import meteordevelopment.meteorclient.systems.accounts.TokenAccount;
@@ -23,8 +25,8 @@ import java.util.Optional;
 import static meteordevelopment.meteorclient.MeteorClient.mc;
 
 public class TheAlteningAccount extends Account<TheAlteningAccount> implements TokenAccount {
-    private static final Environment ENVIRONMENT = new Environment("http://sessionserver.thealtening.com", "http://authserver.thealtening.com", "https://api.mojang.com", "The Altening");
-    private static final YggdrasilAuthenticationService SERVICE = new YggdrasilAuthenticationService(mc.getNetworkProxy(), ENVIRONMENT);
+    private static final Environment ENVIRONMENT = new Environment("http://sessionserver.thealtening.com", "http://authserver.thealtening.com", "The Altening");
+    private static final YggdrasilAuthenticationService SERVICE = new YggdrasilAuthenticationService(((MinecraftClientAccessor) mc).getProxy(), ENVIRONMENT);
     private String token;
     private @Nullable WaybackAuthLib auth;
 
@@ -40,8 +42,8 @@ public class TheAlteningAccount extends Account<TheAlteningAccount> implements T
         try {
             auth.logIn();
 
-            cache.username = auth.getCurrentProfile().name();
-            cache.uuid = auth.getCurrentProfile().id().toString();
+            cache.username = auth.getCurrentProfile().getName();
+            cache.uuid = auth.getCurrentProfile().getId().toString();
             cache.loadHead();
 
             return true;
@@ -57,10 +59,10 @@ public class TheAlteningAccount extends Account<TheAlteningAccount> implements T
     @Override
     public boolean login() {
         if (auth == null) return false;
-        applyLoginEnvironment(SERVICE);
+        applyLoginEnvironment(SERVICE, YggdrasilMinecraftSessionServiceAccessor.createYggdrasilMinecraftSessionService(SERVICE.getServicesKeySet(), SERVICE.getProxy(), ENVIRONMENT));
 
         try {
-            setSession(new Session(auth.getCurrentProfile().name(), auth.getCurrentProfile().id(), auth.getAccessToken(), Optional.empty(), Optional.empty()));
+            setSession(new Session(auth.getCurrentProfile().getName(), auth.getCurrentProfile().getId(), auth.getAccessToken(), Optional.empty(), Optional.empty(), Session.AccountType.MOJANG));
             return true;
         } catch (Exception e) {
             MeteorClient.LOG.error("Failed to login with TheAltening.");
@@ -96,11 +98,11 @@ public class TheAlteningAccount extends Account<TheAlteningAccount> implements T
 
     @Override
     public TheAlteningAccount fromTag(NbtCompound tag) {
-        if (tag.getString("name").isEmpty() || tag.getCompound("cache").isEmpty() || tag.getString("token").isEmpty()) throw new NbtException();
+        if (!tag.contains("name") || !tag.contains("cache") || !tag.contains("token")) throw new NbtException();
 
-        name = tag.getString("name").get();
-        token = tag.getString("token").get();
-        cache.fromTag(tag.getCompound("cache").get());
+        name = tag.getString("name");
+        token = tag.getString("token");
+        cache.fromTag(tag.getCompound("cache"));
 
         return this;
     }

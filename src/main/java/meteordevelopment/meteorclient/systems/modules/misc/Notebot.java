@@ -548,8 +548,6 @@ public class Notebot extends Module {
             BlockPos blockPos = entry.getValue();
 
             BlockState blockState = mc.world.getBlockState(blockPos);
-            if (blockState.getBlock() != Blocks.NOTE_BLOCK) continue;
-
             int currentLevel = blockState.get(NoteBlock.NOTE);
 
             if (targetLevel != currentLevel) {
@@ -626,7 +624,7 @@ public class Notebot extends Module {
     }
 
     public void pause() {
-        enable();
+        if (!isActive()) toggle();
         if (isPlaying) {
             info("Pausing.");
             isPlaying = false;
@@ -638,7 +636,7 @@ public class Notebot extends Module {
 
     public void stop() {
         info("Stopping.");
-        disableNotebot();
+        disable();
         updateStatus();
     }
 
@@ -662,9 +660,9 @@ public class Notebot extends Module {
         }
     }
 
-    public void disableNotebot() {
+    public void disable() {
         resetVariables();
-        enable();
+        if (!isActive()) toggle();
     }
 
     /**
@@ -673,7 +671,7 @@ public class Notebot extends Module {
      * @param file Song supported by one of {@link SongDecoder}
      */
     public void loadSong(File file) {
-        enable();
+        if (!isActive()) toggle();
         resetVariables();
 
         this.playingMode = PlayingMode.Noteblocks;
@@ -690,7 +688,7 @@ public class Notebot extends Module {
      * @param file Song supported by one of {@link SongDecoder}
      */
     public void previewSong(File file) {
-        enable();
+        if (!isActive()) toggle();
         resetVariables();
 
         this.playingMode = PlayingMode.Preview;
@@ -753,7 +751,7 @@ public class Notebot extends Module {
                     error("Loading song '" + FilenameUtils.getBaseName(file.getName()) + "' was cancelled.");
                 } else {
                     error("An error occurred while loading song '" + FilenameUtils.getBaseName(file.getName()) + "'. See the logs for more details");
-                    MeteorClient.LOG.error("An error occurred while loading song '{}'", FilenameUtils.getBaseName(file.getName()), ex);
+                    MeteorClient.LOG.error("An error occurred while loading song '" + FilenameUtils.getBaseName(file.getName()) + "'", ex);
                     onSongEnd();
                 }
             }
@@ -831,7 +829,7 @@ public class Notebot extends Module {
 
     private void tuneBlocks() {
         if (mc.world == null || mc.player == null) {
-            disableNotebot();
+            disable();
         }
 
         if (swingArm.get()) {
@@ -870,7 +868,7 @@ public class Notebot extends Module {
 
     private void tuneNoteblockWithPackets(BlockPos pos) {
         // We don't need to raycast here. Server handles this packet fine
-        mc.interactionManager.sendSequencedPacket(mc.world, (sequence) -> new PlayerInteractBlockC2SPacket(Hand.MAIN_HAND, new BlockHitResult(Vec3d.ofCenter(pos), Direction.DOWN, pos, false), sequence));
+        mc.player.networkHandler.sendPacket(new PlayerInteractBlockC2SPacket(Hand.MAIN_HAND, new BlockHitResult(Vec3d.ofCenter(pos), Direction.DOWN, pos, false), 0));
 
         anyNoteblockTuned = true;
     }
@@ -927,7 +925,7 @@ public class Notebot extends Module {
     private void playRotate(BlockPos pos) {
         if (mc.interactionManager == null) return;
         try {
-            mc.interactionManager.sendSequencedPacket(mc.world, (sequence) -> new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK, pos, Direction.DOWN, sequence));
+            mc.player.networkHandler.sendPacket(new PlayerActionC2SPacket(PlayerActionC2SPacket.Action.START_DESTROY_BLOCK, pos, Direction.DOWN, 0));
         } catch (NullPointerException ignored) {
         }
     }

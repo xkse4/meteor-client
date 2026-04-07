@@ -18,7 +18,7 @@ public class GamemodeCommand extends Command {
     @Override
     public void build(LiteralArgumentBuilder<CommandSource> builder) {
         for (GameMode gameMode : GameMode.values()) {
-            builder.then(literal(gameMode.getId()).executes(context -> {
+            builder.then(literal(gameMode.getName()).executes(context -> {
                 mc.interactionManager.setGameMode(gameMode);
                 return SINGLE_SUCCESS;
             }));

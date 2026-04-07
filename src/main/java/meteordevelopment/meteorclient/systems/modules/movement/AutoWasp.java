@@ -7,8 +7,6 @@ package meteordevelopment.meteorclient.systems.modules.movement;
 
 import meteordevelopment.meteorclient.events.entity.player.PlayerMoveEvent;
 import meteordevelopment.meteorclient.events.world.TickEvent;
-import meteordevelopment.meteorclient.mixin.AbstractBlockAccessor;
-import meteordevelopment.meteorclient.mixin.DirectionAccessor;
 import meteordevelopment.meteorclient.mixininterface.IVec3d;
 import meteordevelopment.meteorclient.settings.*;
 import meteordevelopment.meteorclient.systems.friends.Friends;
@@ -17,9 +15,9 @@ import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.entity.SortPriority;
 import meteordevelopment.meteorclient.utils.entity.TargetUtils;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.EquipmentSlot;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.ElytraItem;
 import net.minecraft.network.packet.c2s.play.ClientCommandC2SPacket;
 import net.minecraft.network.packet.s2c.common.DisconnectS2CPacket;
 import net.minecraft.text.Text;
@@ -93,9 +91,9 @@ public class AutoWasp extends Module {
     public void onActivate() {
         if (target == null || target.isRemoved()) {
             target = (PlayerEntity) TargetUtils.get(entity -> {
-                if (!(entity instanceof PlayerEntity player) || entity == mc.player) return false;
-                if (player.isDead() || player.getHealth() <= 0) return false;
-                return !onlyFriends.get() || Friends.get().get(player) != null;
+                if (!(entity instanceof PlayerEntity) || entity == mc.player) return false;
+                if (((PlayerEntity) entity).isDead() || ((PlayerEntity) entity).getHealth() <= 0) return false;
+                return !onlyFriends.get() || Friends.get().get((PlayerEntity) entity) != null;
             }, SortPriority.LowestDistance);
 
             if (target == null) {
@@ -129,13 +127,13 @@ public class AutoWasp extends Module {
             if (!isActive()) return;
         }
 
-        if (!(mc.player.getEquippedStack(EquipmentSlot.CHEST).contains(DataComponentTypes.GLIDER))) return;
+        if (!(mc.player.getEquippedStack(EquipmentSlot.CHEST).getItem() instanceof ElytraItem)) return;
 
         if (incrementJumpTimer) {
             jumpTimer++;
         }
 
-        if (!mc.player.isGliding()) {
+        if (!mc.player.isFallFlying()) {
             if (!incrementJumpTimer) incrementJumpTimer = true;
 
             if (mc.player.isOnGround() && incrementJumpTimer) {
@@ -157,12 +155,12 @@ public class AutoWasp extends Module {
 
     @EventHandler
     private void onMove(PlayerMoveEvent event) {
-        if (!(mc.player.getEquippedStack(EquipmentSlot.CHEST).contains(DataComponentTypes.GLIDER))) return;
-        if (!mc.player.isGliding()) return;
+        if (!(mc.player.getEquippedStack(EquipmentSlot.CHEST).getItem() instanceof ElytraItem)) return;
+        if (!mc.player.isFallFlying()) return;
 
         double xVel = 0, yVel = 0, zVel = 0;
 
-        Vec3d targetPos = target.getEntityPos().add(offset.get().x, offset.get().y, offset.get().z);
+        Vec3d targetPos = target.getPos().add(offset.get().x, offset.get().y, offset.get().z);
 
         if (predictMovement.get()) targetPos.add(PlayerEntity.adjustMovementForCollisions(target, target.getVelocity(),
             target.getBoundingBox(), mc.world, mc.world.getEntityCollisions(target, target.getBoundingBox().stretch(target.getVelocity()))));
@@ -171,9 +169,9 @@ public class AutoWasp extends Module {
             double d = target.getBoundingBox().getLengthX() / 2; // x length = z length for players
 
             //get the block pos of the block underneath the corner of the targets bounding box
-            for (Direction dir : DirectionAccessor.meteor$getHorizontal()) {
+            for (Direction dir : Direction.HORIZONTAL) {
                 BlockPos pos = BlockPos.ofFloored(targetPos.offset(dir, d).offset(dir.rotateYClockwise(), d)).down();
-                if (((AbstractBlockAccessor) mc.world.getBlockState(pos).getBlock()).meteor$isCollidable() && Math.abs(targetPos.getY() - (pos.getY() + 1)) <= 0.25) {
+                if (mc.world.getBlockState(pos).getBlock().collidable && Math.abs(targetPos.getY() - (pos.getY() + 1)) <= 0.25) {
                     targetPos = new Vec3d(targetPos.x, pos.getY() + 1.25, targetPos.z);
                     break;
                 }
@@ -209,7 +207,7 @@ public class AutoWasp extends Module {
             else yVel = verticalSpeed.get() * Math.signum(yDist);
         }
 
-        ((IVec3d) event.movement).meteor$set(xVel, yVel, zVel);
+        ((IVec3d) event.movement).set(xVel, yVel, zVel);
     }
 
     public enum Action {

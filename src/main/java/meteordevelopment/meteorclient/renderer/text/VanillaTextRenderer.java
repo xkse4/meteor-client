@@ -71,7 +71,7 @@ public class VanillaTextRenderer implements TextRenderer {
         y += 0.5 * scale;
 
         int preA = color.a;
-        color.a = (int) (((double) color.a / 255 * alpha) * 255);
+        color.a = (int) ((color.a / 255 * alpha) * 255);
 
         Matrix4f matrix = emptyMatrix;
         if (scaleIndividually) {
@@ -80,8 +80,7 @@ public class VanillaTextRenderer implements TextRenderer {
             matrix = matrices.peek().getPositionMatrix();
         }
 
-        mc.textRenderer.draw(text, (float) (x / scale), (float) (y / scale), color.getPacked(), shadow, matrix, immediate, TextLayerType.NORMAL, 0, LightmapTextureManager.MAX_LIGHT_COORDINATE);
-        double x2 = (x / scale) + mc.textRenderer.getWidth(text);
+        double x2 = mc.textRenderer.draw(text, (float) (x / scale), (float) (y / scale), color.getPacked(), shadow, matrix, immediate, TextLayerType.NORMAL, 0, LightmapTextureManager.MAX_LIGHT_COORDINATE);
 
         if (scaleIndividually) matrices.pop();
 
@@ -97,17 +96,22 @@ public class VanillaTextRenderer implements TextRenderer {
     }
 
     @Override
-    public void end() {
+    public void end(MatrixStack matrices) {
         if (!building) throw new RuntimeException("VanillaTextRenderer.end() called without calling begin()");
 
         Matrix4fStack matrixStack = RenderSystem.getModelViewStack();
 
+        RenderSystem.disableDepthTest();
         matrixStack.pushMatrix();
+        if (matrices != null) matrixStack.mul(matrices.peek().getPositionMatrix());
         if (!scaleIndividually) matrixStack.scale((float) scale, (float) scale, 1);
+        RenderSystem.applyModelViewMatrix();
 
         immediate.draw();
 
         matrixStack.popMatrix();
+        RenderSystem.enableDepthTest();
+        RenderSystem.applyModelViewMatrix();
 
         this.scale = 2;
         this.building = false;
