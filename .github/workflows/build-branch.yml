@@ -1,12 +1,8 @@
-name: Build
-
-concurrency:
-  group: "build-${{ github.ref }}"
-  cancel-in-progress: true
+name: Build Branch
 
 on:
   push:
-    branches:
+    branches-ignore:
       - master
   workflow_dispatch:
 
@@ -24,7 +20,7 @@ jobs:
       - run: chmod +x gradlew
 
       - name: Build
-        run: ./gradlew build -Pcommit=${{ github.sha }}
+        run: ./gradlew build
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
