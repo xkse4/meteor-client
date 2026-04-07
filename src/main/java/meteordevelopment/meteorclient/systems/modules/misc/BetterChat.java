@@ -6,6 +6,7 @@
 package meteordevelopment.meteorclient.systems.modules.misc;
 
 import com.mojang.authlib.GameProfile;
+import com.mojang.blaze3d.systems.RenderSystem;
 import it.unimi.dsi.fastutil.chars.Char2CharMap;
 import it.unimi.dsi.fastutil.chars.Char2CharOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
@@ -22,17 +23,14 @@ import meteordevelopment.meteorclient.systems.modules.Categories;
 import meteordevelopment.meteorclient.systems.modules.Module;
 import meteordevelopment.meteorclient.utils.Utils;
 import meteordevelopment.meteorclient.utils.misc.text.MeteorClickEvent;
+import meteordevelopment.meteorclient.utils.misc.text.TextVisitor;
 import meteordevelopment.meteorclient.utils.player.ChatUtils;
+import meteordevelopment.meteorclient.utils.render.color.Color;
 import meteordevelopment.orbit.EventHandler;
-import net.minecraft.client.gl.RenderPipelines;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.PlayerSkinDrawer;
 import net.minecraft.client.gui.hud.ChatHudLine;
 import net.minecraft.client.network.PlayerListEntry;
-import net.minecraft.text.HoverEvent;
-import net.minecraft.text.MutableText;
-import net.minecraft.text.Style;
-import net.minecraft.text.Text;
+import net.minecraft.text.*;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 
@@ -70,15 +68,6 @@ public class BetterChat extends Module {
         .name("timestamps")
         .description("Adds client-side time stamps to the beginning of chat messages.")
         .defaultValue(false)
-        .build()
-    );
-
-    private final Setting<Boolean> showSeconds = sgGeneral.add(new BoolSetting.Builder()
-        .name("show-seconds")
-        .description("Shows seconds in the chat message timestamps")
-        .defaultValue(false)
-        .visible(timestamps::get)
-        .onChanged(o -> updateDateFormat())
         .build()
     );
 
@@ -235,12 +224,13 @@ public class BetterChat extends Module {
         .build()
     );
 
-    private static final Pattern antiSpamRegex = Pattern.compile(" \\(([0-9]{1,9})\\)$");
+    private static final Pattern antiSpamRegex = Pattern.compile(" \\(([0-9]+)\\)$");
     private static final Pattern antiClearRegex = Pattern.compile("\\n(\\n|\\s)+\\n");
-    private static final Pattern timestampRegex = Pattern.compile("^(<[0-9]{2}:[0-9]{2}(?::[0-9]{2})?> )");
+    private static final Pattern timestampRegex = Pattern.compile("^(<[0-9]{2}:[0-9]{2}>\\s)");
     private static final Pattern usernameRegex = Pattern.compile("^(?:<[0-9]{2}:[0-9]{2}>\\s)?<(.*?)>.*");
 
     private final Char2CharMap SMALL_CAPS = new Char2CharOpenHashMap();
+    private final SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm");
     public final IntList lines = new IntArrayList();
 
     public BetterChat() {
@@ -270,11 +260,14 @@ public class BetterChat extends Module {
             String messageString = message.getString();
             if (antiClearRegex.matcher(messageString).find()) {
                 MutableText newMessage = Text.empty();
-                message.visit((style, string) -> {
+                TextVisitor.visit(message, (text, style, string) -> {
                     Matcher antiClearMatcher = antiClearRegex.matcher(string);
-                    newMessage.append(Text.literal(
-                        antiClearMatcher.find() ? antiClearMatcher.replaceAll("\n\n") : string
-                    ).setStyle(style));
+                    if (antiClearMatcher.find()) {
+                        // assume literal text content
+                        newMessage.append(Text.literal(antiClearMatcher.replaceAll("\n\n")).setStyle(style));
+                    } else {
+                        newMessage.append(text.copyContentOnly().setStyle(style));
+                    }
 
                     return Optional.empty();
                 }, Style.EMPTY);
@@ -331,7 +324,7 @@ public class BetterChat extends Module {
         Text returnText = null;
         int messageIndex = -1;
 
-        List<ChatHudLine> messages = ((ChatHudAccessor) mc.inGameHud.getChatHud()).meteor$getMessages();
+        List<ChatHudLine> messages = ((ChatHudAccessor) mc.inGameHud.getChatHud()).getMessages();
         if (messages.isEmpty()) return null;
 
         for (int i = 0; i < Math.min(antiSpamDepth.get(), messages.size()); i++) {
@@ -339,7 +332,7 @@ public class BetterChat extends Module {
 
             Matcher timestampMatcher = timestampRegex.matcher(stringToCheck);
             if (timestampMatcher.find()) {
-                stringToCheck = stringToCheck.substring(timestampMatcher.end());
+                stringToCheck = stringToCheck.substring(8);
             }
 
             if (textString.equals(stringToCheck)) {
@@ -362,7 +355,7 @@ public class BetterChat extends Module {
         }
 
         if (returnText != null) {
-            List<ChatHudLine.Visible> visible = ((ChatHudAccessor) mc.inGameHud.getChatHud()).meteor$getVisibleMessages();
+            List<ChatHudLine.Visible> visible = ((ChatHudAccessor) mc.inGameHud.getChatHud()).getVisibleMessages();
 
             int start = -1;
             for (int i = 0; i < messageIndex; i++) {
@@ -403,9 +396,6 @@ public class BetterChat extends Module {
 
     private static final Pattern TIMESTAMP_REGEX = Pattern.compile("^<\\d{1,2}:\\d{1,2}>");
 
-    public ChatHudLine.Visible line;
-
-
     /** Registers a custom player head to render based on a message prefix */
     public static void registerCustomHead(String prefix, Identifier texture) {
         CUSTOM_HEAD_ENTRIES.add(new CustomHeadEntry(prefix, texture));
@@ -421,23 +411,25 @@ public class BetterChat extends Module {
         return width;
     }
 
-
-    public void beforeDrawMessage(DrawContext context, int y, int color) {
-        if (!isActive() || !playerHeads.get() || line == null) return;
+    public void drawPlayerHead(DrawContext context, ChatHudLine.Visible line, int y, int color) {
+        if (!isActive() || !playerHeads.get()) return;
 
         // Only draw the first line of multi line messages
         if (((IChatHudLineVisible) (Object) line).meteor$isStartOfEntry())  {
-            drawTexture(context, (IChatHudLine) (Object) line, y, color);
+            RenderSystem.enableBlend();
+            RenderSystem.setShaderColor(1, 1, 1, Color.toRGBAA(color) / 255f);
+
+            drawTexture(context, (IChatHudLine) (Object) line, y);
+
+            RenderSystem.setShaderColor(1, 1, 1, 1);
+            RenderSystem.disableBlend();
         }
+
+        // Offset
+        context.getMatrices().translate(10, 0, 0);
     }
 
-    public void afterDrawMessage() {
-        if (!isActive() || !playerHeads.get()) return;
-
-        line = null;
-    }
-
-    private void drawTexture(DrawContext context, IChatHudLine line, int y, int color) {
+    private void drawTexture(DrawContext context, IChatHudLine line, int y) {
         String text = line.meteor$getText().trim();
 
         // Custom
@@ -452,7 +444,7 @@ public class BetterChat extends Module {
         for (CustomHeadEntry entry : CUSTOM_HEAD_ENTRIES) {
             // Check prefix
             if (text.startsWith(entry.prefix(), startOffset)) {
-                context.drawTexture(RenderPipelines.GUI_TEXTURED, entry.texture(), 0, y, 0, 0, 8, 8, 64, 64, 64, 64, color);
+                context.drawTexture(entry.texture(), 0, y, 8, 8, 0, 0, 64, 64, 64, 64);
                 return;
             }
         }
@@ -461,10 +453,13 @@ public class BetterChat extends Module {
         GameProfile sender = getSender(line, text);
         if (sender == null) return;
 
-        PlayerListEntry entry = mc.getNetworkHandler().getPlayerListEntry(sender.id());
+        PlayerListEntry entry = mc.getNetworkHandler().getPlayerListEntry(sender.getId());
         if (entry == null) return;
 
-        PlayerSkinDrawer.draw(context, entry.getSkinTextures(), 0, y, 8, color);
+        Identifier skin = entry.getSkinTextures().texture();
+
+        context.drawTexture(skin, 0, y, 8, 8, 8, 8, 8, 8, 64, 64);
+        context.drawTexture(skin, 0, y, 8, 8, 40, 8, 8, 8, 64, 64);
     }
 
     private GameProfile getSender(IChatHudLine line, String text) {
@@ -483,14 +478,6 @@ public class BetterChat extends Module {
         }
 
         return sender;
-    }
-
-    // Timestamps
-
-    private SimpleDateFormat dateFormat;
-
-    private void updateDateFormat() {
-        dateFormat = new SimpleDateFormat(showSeconds.get() ? "HH:mm:ss" : "HH:mm");
     }
 
     // Annoy
@@ -572,8 +559,12 @@ public class BetterChat extends Module {
 
         sendButton.setStyle(sendButton.getStyle()
             .withFormatting(Formatting.DARK_RED)
-            .withClickEvent(new MeteorClickEvent(Commands.get("say").toString(message)))
-            .withHoverEvent(new HoverEvent.ShowText(
+            .withClickEvent(new MeteorClickEvent(
+                ClickEvent.Action.RUN_COMMAND,
+                Commands.get("say").toString(message)
+            ))
+            .withHoverEvent(new HoverEvent(
+                HoverEvent.Action.SHOW_TEXT,
                 hintBaseText
             )));
         return sendButton;

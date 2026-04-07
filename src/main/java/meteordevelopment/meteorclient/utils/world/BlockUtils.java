@@ -34,7 +34,6 @@ import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
-import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.util.shape.VoxelShapes;
 import net.minecraft.world.LightType;
 import net.minecraft.world.World;
@@ -78,7 +77,7 @@ public class BlockUtils {
 
     public static boolean place(BlockPos blockPos, FindItemResult findItemResult, boolean rotate, int rotationPriority, boolean swingHand, boolean checkEntities, boolean swapBack) {
         if (findItemResult.isOffhand()) {
-            return place(blockPos, Hand.OFF_HAND, mc.player.getInventory().getSelectedSlot(), rotate, rotationPriority, swingHand, checkEntities, swapBack);
+            return place(blockPos, Hand.OFF_HAND, mc.player.getInventory().selectedSlot, rotate, rotationPriority, swingHand, checkEntities, swapBack);
         } else if (findItemResult.isHotbar()) {
             return place(blockPos, Hand.MAIN_HAND, findItemResult.slot(), rotate, rotationPriority, swingHand, checkEntities, swapBack);
         }
@@ -129,17 +128,17 @@ public class BlockUtils {
     }
 
     public static void interact(BlockHitResult blockHitResult, Hand hand, boolean swing) {
-        boolean wasSneaking = mc.player.isSneaking();
-        mc.player.setSneaking(false);
+        boolean wasSneaking = mc.player.input.sneaking;
+        mc.player.input.sneaking = false;
 
         ActionResult result = mc.interactionManager.interactBlock(mc.player, hand, blockHitResult);
 
-        if (result.isAccepted()) {
+        if (result.shouldSwingHand()) {
             if (swing) mc.player.swingHand(hand);
             else mc.getNetworkHandler().sendPacket(new HandSwingC2SPacket(hand));
         }
 
-        mc.player.setSneaking(wasSneaking);
+        mc.player.input.sneaking = wasSneaking;
     }
 
     public static boolean canPlaceBlock(BlockPos blockPos, boolean checkEntities, Block block) {
@@ -307,12 +306,22 @@ public class BlockUtils {
             || block instanceof TrapdoorBlock;
     }
 
+    public static MobSpawn isValidMobSpawn(BlockPos blockPos, boolean newMobSpawnLightLevel) {
+        return isValidMobSpawn(blockPos, mc.world.getBlockState(blockPos), newMobSpawnLightLevel ? 0 : 7);
+    }
 
     public static MobSpawn isValidMobSpawn(BlockPos blockPos, BlockState blockState, int spawnLightLimit) {
-        boolean snow = blockState.getBlock() instanceof SnowBlock && blockState.get(SnowBlock.LAYERS) == 1;
-        if (!blockState.isAir() && !snow) return MobSpawn.Never;
+        if (!(blockState.getBlock() instanceof AirBlock)) return MobSpawn.Never;
 
-        if (!isValidSpawnBlock(mc.world.getBlockState(blockPos.down()))) return MobSpawn.Never;
+        BlockPos down = blockPos.down();
+        BlockState downState = mc.world.getBlockState(down);
+        if (downState.getBlock() == Blocks.BEDROCK) return MobSpawn.Never;
+
+        if (!topSurface(downState)) {
+            if (downState.getCollisionShape(mc.world, down) != VoxelShapes.fullCube())
+                return MobSpawn.Never;
+            if (downState.isTransparent(mc.world, down)) return MobSpawn.Never;
+        }
 
         if (mc.world.getLightLevel(LightType.BLOCK, blockPos) > spawnLightLimit) return MobSpawn.Never;
         else if (mc.world.getLightLevel(LightType.SKY, blockPos) > spawnLightLimit) return  MobSpawn.Potential;
@@ -320,39 +329,20 @@ public class BlockUtils {
         return MobSpawn.Always;
     }
 
-    public static boolean isValidSpawnBlock(BlockState blockState) {
-        Block block = blockState.getBlock();
-
-        if (block == Blocks.BEDROCK
-            || block == Blocks.BARRIER
-            || block instanceof TransparentBlock
-            || block instanceof ScaffoldingBlock) return false;
-
-        if (block == Blocks.SOUL_SAND || block == Blocks.MUD) return true;
-        if (block instanceof SlabBlock && blockState.get(SlabBlock.TYPE) == SlabType.TOP) return true;
-        if (block instanceof StairsBlock && blockState.get(StairsBlock.HALF) == BlockHalf.TOP) return true;
-
-        return blockState.isOpaqueFullCube();
+    public static boolean topSurface(BlockState blockState) {
+        if (blockState.getBlock() instanceof SlabBlock && blockState.get(SlabBlock.TYPE) == SlabType.TOP) return true;
+        else return blockState.getBlock() instanceof StairsBlock && blockState.get(StairsBlock.HALF) == BlockHalf.TOP;
     }
 
     // Finds the best block direction to get when interacting with the block.
     public static Direction getDirection(BlockPos pos) {
-        double eyePos = mc.player.getY() + mc.player.getEyeHeight(mc.player.getPose());
-        VoxelShape outline = mc.world.getBlockState(pos).getCollisionShape(mc.world, pos);
-
-        if (eyePos > pos.getY() + outline.getMax(Direction.Axis.Y) && mc.world.getBlockState(pos.up()).isReplaceable()) {
-            return Direction.UP;
-        } else if (eyePos < pos.getY() + outline.getMin(Direction.Axis.Y) && mc.world.getBlockState(pos.down()).isReplaceable()) {
-            return Direction.DOWN;
-        } else {
-            BlockPos difference = pos.subtract(mc.player.getBlockPos());
-
-            if (Math.abs(difference.getX()) > Math.abs(difference.getZ())) {
-                return difference.getX() > 0 ? Direction.WEST : Direction.EAST;
-            } else {
-                return difference.getZ() > 0 ? Direction.NORTH : Direction.SOUTH;
-            }
+        Vec3d eyesPos = new Vec3d(mc.player.getX(), mc.player.getY() + mc.player.getEyeHeight(mc.player.getPose()), mc.player.getZ());
+        if ((double) pos.getY() > eyesPos.y) {
+            if (mc.world.getBlockState(pos.add(0, -1, 0)).isReplaceable()) return Direction.DOWN;
+            else return mc.player.getHorizontalFacing().getOpposite();
         }
+        if (!mc.world.getBlockState(pos.add(0, 1, 0)).isReplaceable()) return mc.player.getHorizontalFacing().getOpposite();
+        return Direction.UP;
     }
 
     public enum MobSpawn {
@@ -365,7 +355,7 @@ public class BlockUtils {
 
     public static boolean isExposed(BlockPos blockPos) {
         for (Direction direction : Direction.values()) {
-            if (!mc.world.getBlockState(EXPOSED_POS.get().set(blockPos, direction)).isOpaqueFullCube()) return true;
+            if (!mc.world.getBlockState(EXPOSED_POS.get().set(blockPos, direction)).isOpaque()) return true;
         }
 
         return false;
@@ -375,7 +365,7 @@ public class BlockUtils {
         float hardness = state.getHardness(null, null);
         if (hardness == -1) return 0;
         else {
-            return getBlockBreakingSpeed(slot, state) / hardness / (!state.isToolRequired() || mc.player.getInventory().getMainStacks().get(slot).isSuitableFor(state) ? 30 : 100);
+            return getBlockBreakingSpeed(slot, state) / hardness / (!state.isToolRequired() || mc.player.getInventory().main.get(slot).isSuitableFor(state) ? 30 : 100);
         }
     }
 
@@ -383,7 +373,7 @@ public class BlockUtils {
      * @see net.minecraft.entity.player.PlayerEntity#getBlockBreakingSpeed(BlockState)
      */
     private static double getBlockBreakingSpeed(int slot, BlockState block) {
-        double speed = mc.player.getInventory().getMainStacks().get(slot).getMiningSpeedMultiplier(block);
+        double speed = mc.player.getInventory().main.get(slot).getMiningSpeedMultiplier(block);
 
         if (speed > 1) {
             ItemStack tool = mc.player.getInventory().getStack(slot);
@@ -409,7 +399,7 @@ public class BlockUtils {
         }
 
         if (mc.player.isSubmergedIn(FluidTags.WATER)) {
-            speed *= mc.player.getAttributeValue(EntityAttributes.SUBMERGED_MINING_SPEED);
+            speed *= mc.player.getAttributeValue(EntityAttributes.PLAYER_SUBMERGED_MINING_SPEED);
         }
 
         if (!mc.player.isOnGround()) {

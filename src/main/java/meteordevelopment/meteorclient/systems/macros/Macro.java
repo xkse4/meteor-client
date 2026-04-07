@@ -11,9 +11,9 @@ import meteordevelopment.meteorclient.utils.misc.ISerializable;
 import meteordevelopment.meteorclient.utils.misc.Keybind;
 import meteordevelopment.meteorclient.utils.misc.MeteorStarscript;
 import meteordevelopment.meteorclient.utils.player.ChatUtils;
+import meteordevelopment.starscript.Script;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
-import org.meteordev.starscript.Script;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -60,26 +60,26 @@ public class Macro implements ISerializable<Macro> {
     }
 
     public boolean onAction() {
-        if (dirty) {
-            scripts.clear();
+            if (dirty) {
+                scripts.clear();
 
-            for (String message : messages.get()) {
-                Script script = MeteorStarscript.compile(message);
-                if (script != null) scripts.add(script);
+                for (String message : messages.get()) {
+                    Script script = MeteorStarscript.compile(message);
+                    if (script != null) scripts.add(script);
+                }
+
+                dirty = false;
             }
 
-            dirty = false;
-        }
+            for (Script script : scripts) {
+                String message = MeteorStarscript.run(script);
 
-        for (Script script : scripts) {
-            String message = MeteorStarscript.run(script);
-
-            if (message != null) {
-                ChatUtils.sendPlayerMsg(message, false);
+                if (message != null) {
+                    ChatUtils.sendPlayerMsg(message);
+                }
             }
-        }
 
-        return true;
+            return true;
     }
 
     @Override
@@ -94,7 +94,7 @@ public class Macro implements ISerializable<Macro> {
     @Override
     public Macro fromTag(NbtCompound tag) {
         if (tag.contains("settings")) {
-            settings.fromTag(tag.getCompoundOrEmpty("settings"));
+            settings.fromTag(tag.getCompound("settings"));
         }
 
         return this;

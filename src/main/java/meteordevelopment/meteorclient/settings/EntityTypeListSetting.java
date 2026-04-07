@@ -114,9 +114,9 @@ public class EntityTypeListSetting extends Setting<Set<EntityType<?>>> {
     public Set<EntityType<?>> load(NbtCompound tag) {
         get().clear();
 
-        NbtList valueTag = tag.getListOrEmpty("value");
+        NbtList valueTag = tag.getList("value", 8);
         for (NbtElement tagI : valueTag) {
-            EntityType<?> type = Registries.ENTITY_TYPE.get(Identifier.of(tagI.asString().orElse("")));
+            EntityType<?> type = Registries.ENTITY_TYPE.get(Identifier.of(tagI.asString()));
             if (filter == null || filter.test(type)) get().add(type);
         }
 

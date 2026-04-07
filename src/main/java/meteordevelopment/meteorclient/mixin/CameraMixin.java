@@ -5,7 +5,6 @@
 
 package meteordevelopment.meteorclient.mixin;
 
-import com.llamalad7.mixinextras.sugar.Local;
 import meteordevelopment.meteorclient.mixininterface.ICamera;
 import meteordevelopment.meteorclient.systems.modules.Modules;
 import meteordevelopment.meteorclient.systems.modules.render.CameraTweaks;
@@ -17,9 +16,10 @@ import net.minecraft.block.enums.CameraSubmersionType;
 import net.minecraft.client.render.Camera;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.MathHelper;
-import net.minecraft.world.World;
+import net.minecraft.world.BlockView;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyArgs;
@@ -37,6 +37,9 @@ public abstract class CameraMixin implements ICamera {
 
     @Shadow protected abstract void setRotation(float yaw, float pitch);
 
+    @Unique
+    private float tickDelta;
+
     @Inject(method = "getSubmersionType", at = @At("HEAD"), cancellable = true)
     private void getSubmergedFluidState(CallbackInfoReturnable<CameraSubmersionType> ci) {
         if (Modules.get().get(NoRender.class).noLiquidOverlay()) ci.setReturnValue(CameraSubmersionType.NONE);
@@ -44,10 +47,7 @@ public abstract class CameraMixin implements ICamera {
 
     @ModifyVariable(method = "clipToSpace", at = @At("HEAD"), ordinal = 0, argsOnly = true)
     private float modifyClipToSpace(float d) {
-        if (Modules.get().get(Freecam.class).isActive()) return 0;
-
-        CameraTweaks cameraTweaks = Modules.get().get(CameraTweaks.class);
-        return cameraTweaks.isActive() ? (float) cameraTweaks.distance : d;
+        return (Modules.get().get(Freecam.class).isActive() ? 0 : (float) Modules.get().get(CameraTweaks.class).getDistance());
     }
 
     @Inject(method = "clipToSpace", at = @At("HEAD"), cancellable = true)
@@ -57,15 +57,20 @@ public abstract class CameraMixin implements ICamera {
         }
     }
 
+    @Inject(method = "update", at = @At("HEAD"))
+    private void onUpdateHead(BlockView area, Entity focusedEntity, boolean thirdPerson, boolean inverseView, float tickDelta, CallbackInfo info) {
+        this.tickDelta = tickDelta;
+    }
+
     @Inject(method = "update", at = @At("TAIL"))
-    private void onUpdateTail(World area, Entity focusedEntity, boolean thirdPerson, boolean inverseView, float tickProgress, CallbackInfo ci) {
+    private void onUpdateTail(BlockView area, Entity focusedEntity, boolean thirdPerson, boolean inverseView, float tickDelta, CallbackInfo info) {
         if (Modules.get().isActive(Freecam.class)) {
             this.thirdPerson = true;
         }
     }
 
     @ModifyArgs(method = "update", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/Camera;setPos(DDD)V"))
-    private void onUpdateSetPosArgs(Args args, @Local(argsOnly = true) float tickDelta) {
+    private void onUpdateSetPosArgs(Args args) {
         Freecam freecam = Modules.get().get(Freecam.class);
 
         if (freecam.isActive()) {
@@ -76,7 +81,7 @@ public abstract class CameraMixin implements ICamera {
     }
 
     @ModifyArgs(method = "update", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/render/Camera;setRotation(FF)V"))
-    private void onUpdateSetRotationArgs(Args args, @Local(argsOnly = true) float tickDelta) {
+    private void onUpdateSetRotationArgs(Args args) {
         Freecam freecam = Modules.get().get(Freecam.class);
         FreeLook freeLook = Modules.get().get(FreeLook.class);
 
@@ -95,7 +100,7 @@ public abstract class CameraMixin implements ICamera {
     }
 
     @Override
-    public void meteor$setRot(double yaw, double pitch) {
+    public void setRot(double yaw, double pitch) {
         setRotation((float) yaw, (float) MathHelper.clamp(pitch, -90, 90));
     }
 }

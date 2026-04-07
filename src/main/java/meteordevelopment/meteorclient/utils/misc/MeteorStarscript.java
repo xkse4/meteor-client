@@ -22,6 +22,16 @@ import meteordevelopment.meteorclient.utils.player.ChatUtils;
 import meteordevelopment.meteorclient.utils.player.PlayerUtils;
 import meteordevelopment.meteorclient.utils.world.Dimension;
 import meteordevelopment.meteorclient.utils.world.TickRate;
+import meteordevelopment.starscript.Script;
+import meteordevelopment.starscript.Section;
+import meteordevelopment.starscript.StandardLib;
+import meteordevelopment.starscript.Starscript;
+import meteordevelopment.starscript.compiler.Compiler;
+import meteordevelopment.starscript.compiler.Parser;
+import meteordevelopment.starscript.utils.Error;
+import meteordevelopment.starscript.utils.StarscriptError;
+import meteordevelopment.starscript.value.Value;
+import meteordevelopment.starscript.value.ValueMap;
 import net.minecraft.SharedConstants;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.network.PlayerListEntry;
@@ -46,16 +56,6 @@ import net.minecraft.util.hit.HitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import org.apache.commons.lang3.StringUtils;
-import org.meteordev.starscript.Script;
-import org.meteordev.starscript.Section;
-import org.meteordev.starscript.StandardLib;
-import org.meteordev.starscript.Starscript;
-import org.meteordev.starscript.compiler.Compiler;
-import org.meteordev.starscript.compiler.Parser;
-import org.meteordev.starscript.utils.Error;
-import org.meteordev.starscript.utils.StarscriptError;
-import org.meteordev.starscript.value.Value;
-import org.meteordev.starscript.value.ValueMap;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -78,8 +78,8 @@ public class MeteorStarscript {
         StandardLib.init(ss);
 
         // General
-        ss.set("mc_version", SharedConstants.getGameVersion().name());
-        ss.set("fps", () -> Value.number(MinecraftClientAccessor.meteor$getFps()));
+        ss.set("mc_version", SharedConstants.getGameVersion().getName());
+        ss.set("fps", () -> Value.number(MinecraftClientAccessor.getFps()));
         ss.set("ping", MeteorStarscript::ping);
         ss.set("time", () -> Value.string(LocalTime.now().format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))));
         ss.set("cps", () -> Value.number(CPSUtils.getCpsAverage()));
@@ -87,7 +87,7 @@ public class MeteorStarscript {
         // Meteor
         ss.set("meteor", new ValueMap()
             .set("name", MeteorClient.NAME)
-            .set("version", MeteorClient.VERSION != null ? (MeteorClient.BUILD_NUMBER.isEmpty() ? MeteorClient.VERSION.toString() : MeteorClient.VERSION + " " + MeteorClient.BUILD_NUMBER) : "")
+            .set("version", MeteorClient.VERSION != null ? (MeteorClient.DEV_BUILD.isEmpty() ? MeteorClient.VERSION.toString() : MeteorClient.VERSION + " " + MeteorClient.DEV_BUILD) : "")
             .set("modules", () -> Value.number(Modules.get().getAll().size()))
             .set("active_modules", () -> Value.number(Modules.get().getActive().size()))
             .set("is_module_active", MeteorStarscript::isModuleActive)
@@ -111,14 +111,14 @@ public class MeteorStarscript {
         ss.set("camera", new ValueMap()
             .set("pos", new ValueMap()
                 .set("_toString", () -> posString(false, true))
-                .set("x", () -> Value.number(mc.gameRenderer.getCamera().getCameraPos().x))
-                .set("y", () -> Value.number(mc.gameRenderer.getCamera().getCameraPos().y))
-                .set("z", () -> Value.number(mc.gameRenderer.getCamera().getCameraPos().z))
+                .set("x", () -> Value.number(mc.gameRenderer.getCamera().getPos().x))
+                .set("y", () -> Value.number(mc.gameRenderer.getCamera().getPos().y))
+                .set("z", () -> Value.number(mc.gameRenderer.getCamera().getPos().z))
             )
             .set("opposite_dim_pos", new ValueMap()
                 .set("_toString", () -> posString(true, true))
                 .set("x", () -> oppositeX(true))
-                .set("y", () -> Value.number(mc.gameRenderer.getCamera().getCameraPos().y))
+                .set("y", () -> Value.number(mc.gameRenderer.getCamera().getPos().y))
                 .set("z", () -> oppositeZ(true))
             )
 
@@ -133,7 +133,6 @@ public class MeteorStarscript {
             .set("health", () -> Value.number(mc.player != null ? mc.player.getHealth() : 0))
             .set("absorption", () -> Value.number(mc.player != null ? mc.player.getAbsorptionAmount() : 0))
             .set("hunger", () -> Value.number(mc.player != null ? mc.player.getHungerManager().getFoodLevel() : 0))
-            .set("saturation", () -> Value.number(mc.player != null ? mc.player.getHungerManager().getSaturationLevel() : 0))
 
             .set("speed", () -> Value.number(Utils.getPlayerSpeed().horizontalLength()))
             .set("speed_all", new ValueMap()
@@ -143,13 +142,13 @@ public class MeteorStarscript {
                 .set("z", () -> Value.number(mc.player != null ? Utils.getPlayerSpeed().z : 0))
             )
 
-            .set("breaking_progress", () -> Value.number(mc.interactionManager != null ? ((ClientPlayerInteractionManagerAccessor) mc.interactionManager).meteor$getBreakingProgress() : 0))
+            .set("breaking_progress", () -> Value.number(mc.interactionManager != null ? ((ClientPlayerInteractionManagerAccessor) mc.interactionManager).getBreakingProgress() : 0))
             .set("biome", MeteorStarscript::biome)
 
             .set("dimension", () -> Value.string(PlayerUtils.getDimension().name()))
             .set("opposite_dimension", () -> Value.string(PlayerUtils.getDimension().opposite().name()))
 
-            .set("gamemode", () -> PlayerUtils.getGameMode() != null ? Value.string(StringUtils.capitalize(PlayerUtils.getGameMode().getId())) : Value.null_())
+            .set("gamemode", () -> PlayerUtils.getGameMode() != null ? Value.string(StringUtils.capitalize(PlayerUtils.getGameMode().getName())) : Value.null_())
 
             .set("pos", new ValueMap()
                 .set("_toString", () -> posString(false, false))
@@ -455,7 +454,7 @@ public class MeteorStarscript {
     }
 
     private static Value oppositeX(boolean camera) {
-        double x = camera ? mc.gameRenderer.getCamera().getCameraPos().x : (mc.player != null ? mc.player.getX() : 0);
+        double x = camera ? mc.gameRenderer.getCamera().getPos().x : (mc.player != null ? mc.player.getX() : 0);
         Dimension dimension = PlayerUtils.getDimension();
 
         if (dimension == Dimension.Overworld) x /= 8;
@@ -465,7 +464,7 @@ public class MeteorStarscript {
     }
 
     private static Value oppositeZ(boolean camera) {
-        double z = camera ? mc.gameRenderer.getCamera().getCameraPos().z : (mc.player != null ? mc.player.getZ() : 0);
+        double z = camera ? mc.gameRenderer.getCamera().getPos().z : (mc.player != null ? mc.player.getZ() : 0);
         Dimension dimension = PlayerUtils.getDimension();
 
         if (dimension == Dimension.Overworld) z /= 8;
@@ -510,13 +509,10 @@ public class MeteorStarscript {
         if (mc.player == null || mc.world == null) return Value.string("");
 
         BP.set(mc.player.getX(), mc.player.getY(), mc.player.getZ());
-        return mc.world.getRegistryManager().getOptional(RegistryKeys.BIOME)
-            .map(biomeRegistry -> {
-                Identifier id = biomeRegistry.getId(mc.world.getBiome(BP).value());
-                if (id == null) return Value.string("Unknown");
-                return Value.string(Arrays.stream(id.getPath().split("_")).map(StringUtils::capitalize).collect(Collectors.joining(" ")));
-            })
-            .orElse(Value.string("Unknown"));
+        Identifier id = mc.world.getRegistryManager().get(RegistryKeys.BIOME).getId(mc.world.getBiome(BP).value());
+        if (id == null) return Value.string("Unknown");
+
+        return Value.string(Arrays.stream(id.getPath().split("_")).map(StringUtils::capitalize).collect(Collectors.joining(" ")));
     }
 
     private static Value handOrOffhand() {
@@ -542,8 +538,8 @@ public class MeteorStarscript {
 
     private static Value posString(boolean opposite, boolean camera) {
         Vec3d pos;
-        if (camera) pos = mc.gameRenderer.getCamera().getCameraPos();
-        else pos = mc.player != null ? mc.player.getEntityPos() : Vec3d.ZERO;
+        if (camera) pos = mc.gameRenderer.getCamera().getPos();
+        else pos = mc.player != null ? mc.player.getPos() : Vec3d.ZERO;
 
         double x = pos.x;
         double z = pos.z;

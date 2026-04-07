@@ -11,9 +11,7 @@ import meteordevelopment.meteorclient.MeteorClient;
 import meteordevelopment.meteorclient.events.entity.DropItemsEvent;
 import meteordevelopment.meteorclient.events.entity.player.ClipAtLedgeEvent;
 import meteordevelopment.meteorclient.systems.modules.Modules;
-import meteordevelopment.meteorclient.systems.modules.movement.Flight;
-import meteordevelopment.meteorclient.systems.modules.movement.NoSlow;
-import meteordevelopment.meteorclient.systems.modules.movement.Sprint;
+import meteordevelopment.meteorclient.systems.modules.movement.*;
 import meteordevelopment.meteorclient.systems.modules.player.Reach;
 import meteordevelopment.meteorclient.systems.modules.player.SpeedMine;
 import meteordevelopment.meteorclient.utils.world.BlockUtils;
@@ -32,6 +30,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import static meteordevelopment.meteorclient.MeteorClient.mc;
@@ -47,32 +46,22 @@ public abstract class PlayerEntityMixin extends LivingEntity {
 
     @Inject(method = "clipAtLedge", at = @At("HEAD"), cancellable = true)
     protected void clipAtLedge(CallbackInfoReturnable<Boolean> info) {
-        if (!getEntityWorld().isClient()) return;
+        if (!getWorld().isClient) return;
 
         ClipAtLedgeEvent event = MeteorClient.EVENT_BUS.post(ClipAtLedgeEvent.get());
         if (event.isSet()) info.setReturnValue(event.isClip());
     }
 
-    @Inject(method = "dropItem", at = @At("HEAD"), cancellable = true)
-    private void onDropItem(ItemStack stack, boolean retainOwnership, CallbackInfoReturnable<ItemEntity> cir) {
-        if (getEntityWorld().isClient() && !stack.isEmpty()) {
-            if (MeteorClient.EVENT_BUS.post(DropItemsEvent.get(stack)).isCancelled()) cir.setReturnValue(null);
+    @Inject(method = "dropItem(Lnet/minecraft/item/ItemStack;ZZ)Lnet/minecraft/entity/ItemEntity;", at = @At("HEAD"), cancellable = true)
+    private void onDropItem(ItemStack stack, boolean bl, boolean bl2, CallbackInfoReturnable<ItemEntity> info) {
+        if (getWorld().isClient && !stack.isEmpty()) {
+            if (MeteorClient.EVENT_BUS.post(DropItemsEvent.get(stack)).isCancelled()) info.cancel();
         }
-    }
-
-    @Inject(method = "isSpectator", at = @At("HEAD"), cancellable = true)
-    private void onIsSpectator(CallbackInfoReturnable<Boolean> info) {
-        if (mc.getNetworkHandler() == null) info.setReturnValue(false);
-    }
-
-    @Inject(method = "isCreative", at = @At("HEAD"), cancellable = true)
-    private void onIsCreative(CallbackInfoReturnable<Boolean> info) {
-        if (mc.getNetworkHandler() == null) info.setReturnValue(false);
     }
 
     @ModifyReturnValue(method = "getBlockBreakingSpeed", at = @At(value = "RETURN"))
     public float onGetBlockBreakingSpeed(float breakSpeed, BlockState block) {
-        if (!getEntityWorld().isClient()) return breakSpeed;
+        if (!getWorld().isClient) return breakSpeed;
 
         SpeedMine speedMine = Modules.get().get(SpeedMine.class);
         if (!speedMine.isActive() || speedMine.mode.get() != SpeedMine.Mode.Normal || !speedMine.filter(block.getBlock())) return breakSpeed;
@@ -91,9 +80,18 @@ public abstract class PlayerEntityMixin extends LivingEntity {
         return breakSpeed;
     }
 
+    @Inject(method = "jump", at = @At("HEAD"), cancellable = true)
+    public void dontJump(CallbackInfo info) {
+        if (!getWorld().isClient) return;
+
+        Anchor module = Modules.get().get(Anchor.class);
+        if (module.isActive() && module.cancelJump) info.cancel();
+        else if (Modules.get().get(Scaffold.class).towering()) info.cancel();
+    }
+
     @ModifyReturnValue(method = "getMovementSpeed", at = @At("RETURN"))
     private float onGetMovementSpeed(float original) {
-        if (!getEntityWorld().isClient()) return original;
+        if (!getWorld().isClient) return original;
         if (!Modules.get().get(NoSlow.class).slowness()) return original;
 
         float walkSpeed = getAbilities().getWalkSpeed();
@@ -108,18 +106,18 @@ public abstract class PlayerEntityMixin extends LivingEntity {
 
     @Inject(method = "getOffGroundSpeed", at = @At("HEAD"), cancellable = true)
     private void onGetOffGroundSpeed(CallbackInfoReturnable<Float> info) {
-        if (!getEntityWorld().isClient()) return;
+        if (!getWorld().isClient) return;
 
         float speed = Modules.get().get(Flight.class).getOffGroundSpeed();
         if (speed != -1) info.setReturnValue(speed);
     }
 
-    @WrapWithCondition(method = "knockbackTarget", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/player/PlayerEntity;setVelocity(Lnet/minecraft/util/math/Vec3d;)V"))
+    @WrapWithCondition(method = "attack", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/player/PlayerEntity;setVelocity(Lnet/minecraft/util/math/Vec3d;)V"))
     private boolean keepSprint$setVelocity(PlayerEntity instance, Vec3d vec3d) {
         return Modules.get().get(Sprint.class).stopSprinting();
     }
 
-    @WrapWithCondition(method = "knockbackTarget", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/player/PlayerEntity;setSprinting(Z)V"))
+    @WrapWithCondition(method = "attack", at = @At(value = "INVOKE", target = "Lnet/minecraft/entity/player/PlayerEntity;setSprinting(Z)V"))
     private boolean keepSprint$setSprinting(PlayerEntity instance, boolean b) {
         return Modules.get().get(Sprint.class).stopSprinting();
     }

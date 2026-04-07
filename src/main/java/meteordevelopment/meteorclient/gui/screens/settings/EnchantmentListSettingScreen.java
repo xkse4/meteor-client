@@ -6,7 +6,6 @@
 package meteordevelopment.meteorclient.gui.screens.settings;
 
 import meteordevelopment.meteorclient.gui.GuiTheme;
-import meteordevelopment.meteorclient.gui.screens.settings.base.DynamicRegistryListSettingScreen;
 import meteordevelopment.meteorclient.gui.widgets.WWidget;
 import meteordevelopment.meteorclient.settings.Setting;
 import meteordevelopment.meteorclient.utils.misc.Names;
@@ -23,14 +22,11 @@ public class EnchantmentListSettingScreen extends DynamicRegistryListSettingScre
 
     @Override
     protected WWidget getValueWidget(RegistryKey<Enchantment> value) {
-        return theme.label(Names.get(value));
+        return theme.label(getValueName(value));
     }
 
     @Override
-    protected String[] getValueNames(RegistryKey<Enchantment> value) {
-        return new String[]{
-            Names.get(value),
-            value.getValue().toString()
-        };
+    protected String getValueName(RegistryKey<Enchantment> value) {
+        return Names.get(value);
     }
 }
